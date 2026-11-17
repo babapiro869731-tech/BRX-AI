@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: brx-ai
+    description: BRX AI dashboard, conversations, memory, and chat
 paths:
   /healthz:
     get:
@@ -24,6 +26,173 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /brx/session:
+    get:
+      operationId: getBrxSession
+      tags: [brx-ai]
+      summary: Start or resume a private browser session
+      responses:
+        "200":
+          description: Current session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrxSession"
+  /brx/dashboard:
+    get:
+      operationId: getBrxDashboard
+      tags: [brx-ai]
+      summary: Get assistant status and usage summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrxDashboard"
+  /brx/conversations:
+    get:
+      operationId: listBrxConversations
+      tags: [brx-ai]
+      summary: List conversations for the current session
+      responses:
+        "200":
+          description: Recent conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BrxConversation"
+    post:
+      operationId: createBrxConversation
+      tags: [brx-ai]
+      summary: Create a conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrxConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrxConversation"
+  /brx/conversations/{id}:
+    get:
+      operationId: getBrxConversation
+      tags: [brx-ai]
+      summary: Get a conversation and its messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Conversation and messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrxConversationDetail"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrxError"
+    delete:
+      operationId: deleteBrxConversation
+      tags: [brx-ai]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Conversation deleted
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrxError"
+  /brx/conversations/{id}/messages:
+    get:
+      operationId: listBrxMessages
+      tags: [brx-ai]
+      summary: List messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Conversation messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BrxMessage"
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrxError"
+    post:
+      operationId: sendBrxMessage
+      tags: [brx-ai]
+      summary: Send a message and receive an assistant response stream
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrxChatMessageInput"
+      responses:
+        "200":
+          description: Server-sent events containing text chunks and a completion event
+          content:
+            text/event-stream: {}
+        "404":
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrxError"
+  /brx/memory:
+    delete:
+      operationId: resetBrxMemory
+      tags: [brx-ai]
+      summary: Clear conversations and remembered context for this session
+      responses:
+        "200":
+          description: Memory reset result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrxMemoryReset"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +202,114 @@ components:
           type: string
       required:
         - status
+    BrxSession:
+      type: object
+      properties:
+        ready:
+          type: boolean
+      required:
+        - ready
+    BrxDashboard:
+      type: object
+      properties:
+        conversationCount:
+          type: integer
+        messageCount:
+          type: integer
+        model:
+          type: string
+        discordConnected:
+          type: boolean
+        voiceEnabled:
+          type: boolean
+      required:
+        - conversationCount
+        - messageCount
+        - model
+        - discordConnected
+        - voiceEnabled
+    BrxConversation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        messageCount:
+          type: integer
+      required: [id, title, createdAt, updatedAt, messageCount]
+    BrxMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversationId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, conversationId, role, content, createdAt]
+    BrxConversationDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        messageCount:
+          type: integer
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/BrxMessage"
+      required: [id, title, createdAt, updatedAt, messageCount, messages]
+    BrxConversationInput:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 120
+    BrxChatMessageInput:
+      type: object
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 12000
+      required: [content]
+    BrxMemoryReset:
+      type: object
+      properties:
+        deletedConversationCount:
+          type: integer
+        message:
+          type: string
+      required: [deletedConversationCount, message]
+    BrxError:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
 
